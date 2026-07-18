@@ -17,6 +17,11 @@
     font-family:'SF Mono','Menlo',monospace; overscroll-behavior:none; user-select:none;}
   #app{display:flex; flex-direction:column; height:100vh; height:100dvh;}
 
+  #alertBanner{position:fixed; top:0; left:0; right:0; background:var(--red); color:#fff; padding:12px 14px;
+    text-align:center; font-size:13px; font-weight:700; letter-spacing:1px; z-index:30;
+    transform:translateY(-100%); transition:transform .2s ease; text-transform:uppercase;}
+  #alertBanner.active{transform:translateY(0);}
+
   header{display:flex; align-items:center; justify-content:space-between;
     padding:calc(env(safe-area-inset-top) + 10px) 14px 8px; border-bottom:1px solid var(--line);}
   header h1{font-size:13px; letter-spacing:2px; margin:0; color:var(--green); font-weight:600;}
@@ -76,6 +81,8 @@
 </style>
 </head>
 <body>
+<div id="alertBanner">⚠ TRAFFIC ALERT</div>
+
 <div id="app">
   <header>
     <h1>TRAFFIC ALERT</h1>
@@ -157,6 +164,18 @@
 </div>
 
 <script>
+let alertBannerTimeout;
+
+function showAlertBanner(){
+  const banner = document.getElementById('alertBanner');
+  if(!banner) return;
+  banner.classList.add('active');
+  clearTimeout(alertBannerTimeout);
+  alertBannerTimeout = setTimeout(()=>{
+    banner.classList.remove('active');
+  }, 3000);
+}
+
 /* ---------------- Settings (persisted) ---------------- */
 const settings = {
   rangeNM: +localStorage.getItem('rangeNM') || 5,
@@ -273,6 +292,7 @@ if(testNearBtn){
   testNearBtn.addEventListener('click', ()=>{
     const mockTraffic = { distNM: 1, aglFt: 500, bearing: 45, clock: 1, track: 180, closing: false };
     speak(buildPhrase(mockTraffic));
+    showAlertBanner();
   });
 }
 
@@ -280,6 +300,7 @@ if(testFarBtn){
   testFarBtn.addEventListener('click', ()=>{
     const mockTraffic = { distNM: 5, aglFt: 2000, bearing: 270, clock: 9, track: 90, closing: false };
     speak(buildPhrase(mockTraffic));
+    showAlertBanner();
   });
 }
 
@@ -287,6 +308,7 @@ if(testClosingBtn){
   testClosingBtn.addEventListener('click', ()=>{
     const mockTraffic = { distNM: 2, aglFt: 1500, bearing: 180, clock: 6, track: 0, closing: true };
     speak(buildPhrase(mockTraffic));
+    showAlertBanner();
   });
 }
 
@@ -510,6 +532,7 @@ function processAndRender(){
       const gotCloser = raw.lastAlertedDistNM!=null ? (raw.lastAlertedDistNM - distNM > 0.5) : false;
       if(elapsed >= settings.freqSec || (closing && gotCloser)){
         speak(buildPhrase(t));
+        showAlertBanner();
         raw.lastAlertedAt = now;
         raw.lastAlertedDistNM = distNM;
       }
