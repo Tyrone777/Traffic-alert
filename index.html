@@ -52,9 +52,11 @@
   .field label{display:block; font-size:11px; letter-spacing:1px; color:var(--dim); margin-bottom:8px; text-transform:uppercase;}
   .stepper{display:flex; align-items:center; justify-content:space-between; background:var(--panel);
     border:1px solid var(--line); border-radius:8px; padding:10px 14px;}
-  .stepper .val{font-size:15px; color:var(--green);}
+  .stepper .val{flex:1; text-align:center; padding:0 12px; font-size:15px; color:var(--green); min-width:60px;}
+  .stepper input{flex:1; text-align:center; background:var(--line); border:none; color:var(--green);
+    padding:6px; border-radius:4px; font-family:inherit; font-size:15px; max-width:80px;}
   .stepper button{background:none; border:1px solid var(--line); color:var(--text); width:32px; height:32px;
-    border-radius:6px; font-size:18px; line-height:1; cursor:pointer;}
+    border-radius:6px; font-size:18px; line-height:1; cursor:pointer; flex-shrink:0;}
   .toggleRow{display:flex; align-items:center; justify-content:space-between; background:var(--panel);
     border:1px solid var(--line); border-radius:8px; padding:12px 14px;}
   .switch{width:44px; height:26px; border-radius:13px; background:var(--line); position:relative; transition:.2s; cursor:pointer;}
@@ -97,26 +99,26 @@
   </header>
   <div class="settingsBody">
     <div class="field">
-      <label>Alert distance</label>
+      <label>Alert distance (nm)</label>
       <div class="stepper">
         <button data-step="range" data-delta="-1">−</button>
-        <span class="val" id="valRange">5 nm</span>
+        <input type="number" id="inputRange" min="1" max="20" value="5">
         <button data-step="range" data-delta="1">+</button>
       </div>
     </div>
     <div class="field">
-      <label>Altitude band (AGL)</label>
+      <label>Altitude band (AGL, ft)</label>
       <div class="stepper">
         <button data-step="alt" data-delta="-200">−</button>
-        <span class="val" id="valAlt">2000 ft</span>
+        <input type="number" id="inputAlt" min="200" max="5000" step="100" value="2000">
         <button data-step="alt" data-delta="200">+</button>
       </div>
     </div>
     <div class="field">
-      <label>Repeat no sooner than</label>
+      <label>Repeat no sooner than (seconds)</label>
       <div class="stepper">
         <button data-step="freq" data-delta="-5">−</button>
-        <span class="val" id="valFreq">45 s</span>
+        <input type="number" id="inputFreq" min="10" max="180" step="5" value="45">
         <button data-step="freq" data-delta="5">+</button>
       </div>
       <div class="hint">Fast-closing traffic can still re-alert early.</div>
@@ -173,18 +175,47 @@ function saveSettings(){
 }
 
 function refreshSettingsUI(){
-  const valRangeEl = document.getElementById('valRange');
-  const valAltEl = document.getElementById('valAlt');
-  const valFreqEl = document.getElementById('valFreq');
+  const inputRangeEl = document.getElementById('inputRange');
+  const inputAltEl = document.getElementById('inputAlt');
+  const inputFreqEl = document.getElementById('inputFreq');
   const voiceToggleEl = document.getElementById('voiceToggle');
   
-  if(valRangeEl) valRangeEl.textContent = settings.rangeNM + ' nm';
-  if(valAltEl) valAltEl.textContent = settings.altFt + ' ft';
-  if(valFreqEl) valFreqEl.textContent = settings.freqSec + ' s';
+  if(inputRangeEl) inputRangeEl.value = settings.rangeNM;
+  if(inputAltEl) inputAltEl.value = settings.altFt;
+  if(inputFreqEl) inputFreqEl.value = settings.freqSec;
   if(voiceToggleEl) voiceToggleEl.classList.toggle('on', settings.voice);
 }
 
 refreshSettingsUI();
+
+// Input fields
+const inputRange = document.getElementById('inputRange');
+const inputAlt = document.getElementById('inputAlt');
+const inputFreq = document.getElementById('inputFreq');
+
+if(inputRange){
+  inputRange.addEventListener('change', ()=>{
+    settings.rangeNM = Math.max(1, Math.min(20, +inputRange.value || settings.rangeNM));
+    saveSettings();
+    refreshSettingsUI();
+  });
+}
+
+if(inputAlt){
+  inputAlt.addEventListener('change', ()=>{
+    settings.altFt = Math.max(200, Math.min(5000, +inputAlt.value || settings.altFt));
+    saveSettings();
+    refreshSettingsUI();
+  });
+}
+
+if(inputFreq){
+  inputFreq.addEventListener('change', ()=>{
+    settings.freqSec = Math.max(10, Math.min(180, +inputFreq.value || settings.freqSec));
+    saveSettings();
+    refreshSettingsUI();
+  });
+}
 
 // Stepper buttons
 document.querySelectorAll('button[data-step]').forEach(btn=>{
