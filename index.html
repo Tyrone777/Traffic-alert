@@ -68,6 +68,9 @@
   .disclaimer{font-size:11px; color:var(--dim); line-height:1.5; border-top:1px solid var(--line); padding-top:14px; margin-top:6px;}
   .primeBtn{width:100%; background:var(--green-dim); color:#03110a; border:none; padding:14px; border-radius:8px;
     font-weight:700; font-size:13px; letter-spacing:1px; margin-top:6px; cursor:pointer;}
+  .testSection{border-top:1px solid var(--line); padding-top:14px; margin-top:14px;}
+  .testBtn{width:100%; background:#ff9500; color:#0a0a0a; border:none; padding:12px; border-radius:8px;
+    font-weight:700; font-size:12px; letter-spacing:1px; margin-top:8px; cursor:pointer;}
 </style>
 </head>
 <body>
@@ -134,6 +137,12 @@
         old its last position report is.
       </div>
       <button class="primeBtn" id="reconnectBtn">REFRESH NOW</button>
+    </div>
+    <div class="testSection">
+      <label style="display:block; font-size:11px; letter-spacing:1px; color:var(--dim); text-transform:uppercase; margin-bottom:8px;">Test voice alerts</label>
+      <button class="testBtn" id="testNearBtn">Test: Close traffic (1 mile, 500 ft)</button>
+      <button class="testBtn" id="testFarBtn">Test: Distant traffic (5 miles, 2000 ft)</button>
+      <button class="testBtn" id="testClosingBtn">Test: Closing traffic (2 miles, 1500 ft)</button>
     </div>
     <div class="disclaimer">
       Altitudes shown are ESTIMATED AGL — reported MSL altitude minus estimated ground elevation
@@ -221,6 +230,32 @@ if(reconnectBtn){
   reconnectBtn.addEventListener('click', ()=>{
     pollTraffic();
     if(settingsPanel) settingsPanel.classList.remove('open');
+  });
+}
+
+// Test voice alerts
+const testNearBtn = document.getElementById('testNearBtn');
+const testFarBtn = document.getElementById('testFarBtn');
+const testClosingBtn = document.getElementById('testClosingBtn');
+
+if(testNearBtn){
+  testNearBtn.addEventListener('click', ()=>{
+    const mockTraffic = { distNM: 1, aglFt: 500, bearing: 45, clock: 1, track: 180, closing: false };
+    speak(buildPhrase(mockTraffic));
+  });
+}
+
+if(testFarBtn){
+  testFarBtn.addEventListener('click', ()=>{
+    const mockTraffic = { distNM: 5, aglFt: 2000, bearing: 270, clock: 9, track: 90, closing: false };
+    speak(buildPhrase(mockTraffic));
+  });
+}
+
+if(testClosingBtn){
+  testClosingBtn.addEventListener('click', ()=>{
+    const mockTraffic = { distNM: 2, aglFt: 1500, bearing: 180, clock: 6, track: 0, closing: true };
+    speak(buildPhrase(mockTraffic));
   });
 }
 
