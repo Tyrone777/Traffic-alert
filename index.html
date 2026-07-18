@@ -25,7 +25,7 @@
   .dot{width:7px; height:7px; border-radius:50%; background:var(--dim); display:inline-block;}
   .dot.on{background:var(--green); box-shadow:0 0 6px var(--green);}
   .dot.off{background:var(--red); box-shadow:0 0 6px var(--red);}
-  .gear{font-size:18px; color:var(--dim); padding:4px;}
+  .gear{font-size:18px; color:var(--dim); padding:4px; cursor:pointer;}
 
   #radarWrap{position:relative; flex:0 0 auto; padding:10px 14px;}
   canvas{width:100%; aspect-ratio:1/1; display:block; background:radial-gradient(circle, #0a1512 0%, #05080a 75%);
@@ -46,7 +46,7 @@
     transition:transform .25s ease; display:flex; flex-direction:column;}
   #settings.open{transform:translateX(0);}
   #settings header{border-bottom:1px solid var(--line);}
-  .back{color:var(--green); font-size:14px; padding:4px 8px 4px 0;}
+  .back{color:var(--green); font-size:14px; padding:4px 8px 4px 0; cursor:pointer;}
   .settingsBody{padding:16px; overflow-y:auto;}
   .field{margin-bottom:22px;}
   .field label{display:block; font-size:11px; letter-spacing:1px; color:var(--dim); margin-bottom:8px; text-transform:uppercase;}
@@ -54,10 +54,10 @@
     border:1px solid var(--line); border-radius:8px; padding:10px 14px;}
   .stepper .val{font-size:15px; color:var(--green);}
   .stepper button{background:none; border:1px solid var(--line); color:var(--text); width:32px; height:32px;
-    border-radius:6px; font-size:18px; line-height:1;}
+    border-radius:6px; font-size:18px; line-height:1; cursor:pointer;}
   .toggleRow{display:flex; align-items:center; justify-content:space-between; background:var(--panel);
     border:1px solid var(--line); border-radius:8px; padding:12px 14px;}
-  .switch{width:44px; height:26px; border-radius:13px; background:var(--line); position:relative; transition:.2s;}
+  .switch{width:44px; height:26px; border-radius:13px; background:var(--line); position:relative; transition:.2s; cursor:pointer;}
   .switch.on{background:var(--green-dim);}
   .switch::after{content:''; position:absolute; width:20px; height:20px; border-radius:50%; background:#fff;
     top:3px; left:3px; transition:.2s;}
@@ -67,7 +67,7 @@
   .hint{font-size:11px; color:var(--dim); margin-top:6px; line-height:1.4;}
   .disclaimer{font-size:11px; color:var(--dim); line-height:1.5; border-top:1px solid var(--line); padding-top:14px; margin-top:6px;}
   .primeBtn{width:100%; background:var(--green-dim); color:#03110a; border:none; padding:14px; border-radius:8px;
-    font-weight:700; font-size:13px; letter-spacing:1px; margin-top:6px;}
+    font-weight:700; font-size:13px; letter-spacing:1px; margin-top:6px; cursor:pointer;}
 </style>
 </head>
 <body>
@@ -154,6 +154,7 @@ const settings = {
   voice: localStorage.getItem('voice') !== 'off',
   host: localStorage.getItem('host') || '192.168.10.1'
 };
+
 function saveSettings(){
   localStorage.setItem('rangeNM', settings.rangeNM);
   localStorage.setItem('altFt', settings.altFt);
@@ -161,37 +162,74 @@ function saveSettings(){
   localStorage.setItem('voice', settings.voice ? 'on':'off');
   localStorage.setItem('host', settings.host);
 }
+
 function refreshSettingsUI(){
-  document.getElementById('valRange').textContent = settings.rangeNM + ' nm';
-  document.getElementById('valAlt').textContent = settings.altFt + ' ft';
-  document.getElementById('valFreq').textContent = settings.freqSec + ' s';
-  document.getElementById('voiceToggle').classList.toggle('on', settings.voice);
-  document.getElementById('stratuxHost').value = settings.host;
+  const valRangeEl = document.getElementById('valRange');
+  const valAltEl = document.getElementById('valAlt');
+  const valFreqEl = document.getElementById('valFreq');
+  const voiceToggleEl = document.getElementById('voiceToggle');
+  
+  if(valRangeEl) valRangeEl.textContent = settings.rangeNM + ' nm';
+  if(valAltEl) valAltEl.textContent = settings.altFt + ' ft';
+  if(valFreqEl) valFreqEl.textContent = settings.freqSec + ' s';
+  if(voiceToggleEl) voiceToggleEl.classList.toggle('on', settings.voice);
 }
+
 refreshSettingsUI();
 
+// Stepper buttons
 document.querySelectorAll('button[data-step]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     const d = +btn.dataset.delta;
     if(btn.dataset.step==='range') settings.rangeNM = Math.max(1, Math.min(20, settings.rangeNM+d));
     if(btn.dataset.step==='alt') settings.altFt = Math.max(200, Math.min(5000, settings.altFt+d));
     if(btn.dataset.step==='freq') settings.freqSec = Math.max(10, Math.min(180, settings.freqSec+d));
-    saveSettings(); refreshSettingsUI();
+    saveSettings();
+    refreshSettingsUI();
   });
 });
-document.getElementById('voiceToggle').addEventListener('click', ()=>{
-  settings.voice = !settings.voice; saveSettings(); refreshSettingsUI();
-});
-document.getElementById('openSettings').addEventListener('click', ()=> document.getElementById('settings').classList.add('open'));
-document.getElementById('closeSettings').addEventListener('click', ()=> document.getElementById('settings').classList.remove('open'));
-document.getElementById('reconnectBtn').addEventListener('click', ()=>{
-  pollTraffic();
-  document.getElementById('settings').classList.remove('open');
-});
+
+// Voice toggle
+const voiceToggle = document.getElementById('voiceToggle');
+if(voiceToggle){
+  voiceToggle.addEventListener('click', ()=>{
+    settings.voice = !settings.voice;
+    saveSettings();
+    refreshSettingsUI();
+  });
+}
+
+// Settings menu
+const openSettingsBtn = document.getElementById('openSettings');
+const closeSettingsBtn = document.getElementById('closeSettings');
+const settingsPanel = document.getElementById('settings');
+const reconnectBtn = document.getElementById('reconnectBtn');
+
+if(openSettingsBtn){
+  openSettingsBtn.addEventListener('click', ()=>{
+    if(settingsPanel) settingsPanel.classList.add('open');
+  });
+}
+
+if(closeSettingsBtn){
+  closeSettingsBtn.addEventListener('click', ()=>{
+    if(settingsPanel) settingsPanel.classList.remove('open');
+  });
+}
+
+if(reconnectBtn){
+  reconnectBtn.addEventListener('click', ()=>{
+    pollTraffic();
+    if(settingsPanel) settingsPanel.classList.remove('open');
+  });
+}
 
 /* ---------------- GPS (phone location — the only position source) ---------------- */
 let userLoc = null; // {lat, lon, altFt, track}
-function setGpsDot(ok){ document.getElementById('dotGps').className = 'dot ' + (ok?'on':'off'); }
+function setGpsDot(ok){ 
+  const dot = document.getElementById('dotGps');
+  if(dot) dot.className = 'dot ' + (ok?'on':'off');
+}
 
 if('geolocation' in navigator){
   navigator.geolocation.watchPosition(pos=>{
@@ -211,6 +249,7 @@ if('geolocation' in navigator){
 /* ---------------- Ground elevation estimate (best-effort, cached) ---------------- */
 let groundElevFt = null;
 let lastElevLookup = null;
+
 async function refreshGroundElevation(){
   if(!userLoc) return;
   if(lastElevLookup){
@@ -224,24 +263,24 @@ async function refreshGroundElevation(){
     const meters = j?.results?.[0]?.elevation;
     if(typeof meters === 'number') groundElevFt = meters*3.28084;
   }catch(e){
-    // no internet reachable (common if Stratux Wi-Fi has no internet uplink) — fall back to phone altitude
     groundElevFt = null;
   }
 }
+
 setInterval(refreshGroundElevation, 15000);
 
 /* ---------------- Internet traffic source (airplanes.live public API) ---------------- */
-// No receiver needed — polls a free community ADS-B aggregator centered on your GPS position.
-// NOTE: this is a best-effort free public API with no uptime guarantee. If it changes or goes
-// down, swap the URL below for another compatible feed (e.g. api.adsb.lol uses the same shape).
 let targets = {}; // icao hex -> target object
 let netOk = false;
-function setStxDot(ok){ netOk = ok; document.getElementById('dotStratux').className = 'dot ' + (ok?'on':'off'); }
 
-const MAX_RADIUS_NM = 250; // API cap
+function setStxDot(ok){ 
+  netOk = ok;
+  const dot = document.getElementById('dotStratux');
+  if(dot) dot.className = 'dot ' + (ok?'on':'off');
+}
+
+const MAX_RADIUS_NM = 250;
 let polling = false;
-// Compatible mirrors, tried in order. If the first is unreachable (down, or
-// blocks browser CORS requests) the app automatically falls back to the next.
 const ENDPOINTS = [
   (lat,lon,r)=> `https://api.airplanes.live/v2/point/${lat}/${lon}/${r}`,
   (lat,lon,r)=> `https://api.adsb.lol/v2/point/${lat}/${lon}/${r}`
@@ -276,7 +315,7 @@ async function pollTraffic(){
       seen.add(id);
       const altMSL = (typeof ac.alt_geom === 'number') ? ac.alt_geom
                     : (typeof ac.alt_baro === 'number') ? ac.alt_baro : null;
-      if(altMSL === null) return; // no usable altitude, skip
+      if(altMSL === null) return;
       const ageSec = (typeof ac.seen_pos === 'number') ? ac.seen_pos : (typeof ac.seen === 'number' ? ac.seen : null);
       const prev = targets[id] || {};
       targets[id] = {
@@ -291,17 +330,17 @@ async function pollTraffic(){
         lastAlertedDistNM: prev.lastAlertedDistNM
       };
     });
-    // drop aircraft no longer in the response
     for(const id in targets){ if(!seen.has(id)) delete targets[id]; }
     setStxDot(true);
   }catch(e){
+    console.warn('Traffic poll error:', e);
     setStxDot(false);
   }
   polling = false;
 }
 
 pollTraffic();
-setInterval(pollTraffic, 8000); // poll every 8s — free API, be a good citizen
+setInterval(pollTraffic, 8000);
 
 /* ---------------- Geometry helpers ---------------- */
 function toRad(d){ return d*Math.PI/180; }
@@ -334,7 +373,7 @@ function compassAbbrev(bearing){
 }
 function isClosing(t, userLat, userLon, currentDistNM){
   if(t.track==null || t.speedKts==null || t.speedKts<=5) return false;
-  const nm = t.speedKts * (30/3600); // 30 sec projection
+  const nm = t.speedKts * (30/3600);
   const dLat = (nm/60)*Math.cos(toRad(t.track));
   const dLon = (nm/60)*Math.sin(toRad(t.track))/Math.cos(toRad(t.lat));
   const projDist = haversineNM(userLat,userLon, t.lat+dLat, t.lon+dLon);
@@ -345,12 +384,14 @@ function isClosing(t, userLat, userLon, currentDistNM){
 let speechQueue = [];
 let speaking = false;
 let lastSpoken = null;
+
 function speak(phrase){
   if(!settings.voice) return;
   if(lastSpoken===phrase) return;
   speechQueue.push(phrase);
   if(!speaking) speakNext();
 }
+
 function speakNext(){
   if(speechQueue.length===0){ speaking=false; return; }
   speaking = true;
@@ -361,6 +402,7 @@ function speakNext(){
   u.onend = speakNext; u.onerror = speakNext;
   speechSynthesis.speak(u);
 }
+
 function buildPhrase(t){
   let phrase = "Traffic, ";
   if(t.distNM < 1.5){
@@ -377,7 +419,7 @@ function buildPhrase(t){
 /* ---------------- Main processing loop ---------------- */
 const listEl = document.getElementById('list');
 const canvas = document.getElementById('radar');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 
 function processAndRender(){
   if(!userLoc){ requestAnimationFrame(loop); return; }
@@ -396,7 +438,6 @@ function processAndRender(){
 
     if(distNM <= settings.rangeNM*2) processed.push(t);
 
-    // Alert decision
     if(settings.voice && distNM<=settings.rangeNM && aglFt<=settings.altFt){
       const now = Date.now();
       const elapsed = raw.lastAlertedAt ? (now-raw.lastAlertedAt)/1000 : Infinity;
@@ -415,6 +456,7 @@ function processAndRender(){
 }
 
 function renderList(list){
+  if(!listEl) return;
   if(list.length===0){ listEl.innerHTML = '<div class="empty">No traffic in range</div>'; return; }
   listEl.innerHTML = list.map(t=>`
     <div class="row">
@@ -431,11 +473,11 @@ function renderList(list){
 }
 
 function renderRadar(list){
+  if(!canvas || !ctx) return;
   const w = canvas.width, h = canvas.height;
   ctx.clearRect(0,0,w,h);
   const cx=w/2, cy=h/2, R=w/2-30;
 
-  // range rings
   ctx.strokeStyle = 'rgba(57,255,136,0.25)'; ctx.lineWidth=1;
   [0.33,0.66,1].forEach(f=>{
     ctx.beginPath(); ctx.arc(cx,cy,R*f,0,Math.PI*2); ctx.stroke();
@@ -445,7 +487,6 @@ function renderRadar(list){
     ctx.fillText(Math.round(settings.rangeNM*f)+' nm', cx, cy-R*f-4);
   });
 
-  // user marker
   ctx.fillStyle='#4da6ff';
   ctx.beginPath(); ctx.moveTo(cx, cy-8); ctx.lineTo(cx-6, cy+6); ctx.lineTo(cx+6, cy+6); ctx.closePath(); ctx.fill();
 
