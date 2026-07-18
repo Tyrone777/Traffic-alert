@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Traffic">
+<title>ADS-B Traffic Alert</title>
+<style>
+  :root{
+    --bg:#05080a; --panel:#0c1315; --line:#173028; --amber:#ffb400;
+    --green:#39ff88; --green-dim:#1f8a52; --red:#ff4d4d; --text:#d7e6df; --dim:#5c7568;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; margin:0; background:var(--bg); color:var(--text);
+    font-family:'SF Mono','Menlo',monospace; overscroll-behavior:none; user-select:none;}
+  #app{display:flex; flex-direction:column; height:100vh; height:100dvh;}
+
+  header{display:flex; align-items:center; justify-content:space-between;
+    padding:calc(env(safe-area-inset-top) + 10px) 14px 8px; border-bottom:1px solid var(--line);}
+  header h1{font-size:13px; letter-spacing:2px; margin:0; color:var(--green); font-weight:600;}
+  .status{display:flex; gap:12px; font-size:10px; letter-spacing:1px;}
+  .status span{display:flex; align-items:center; gap:4px;}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--dim); display:inline-block;}
+  .dot.on{background:var(--green); box-shadow:0 0 6px var(--green);}
+  .dot.off{background:var(--red); box-shadow:0 0 6px var(--red);}
+  .gear{font-size:18px; color:var(--dim); padding:4px;}
+
+  #radarWrap{position:relative; flex:0 0 auto; padding:10px 14px;}
+  canvas{width:100%; aspect-ratio:1/1; display:block; background:radial-gradient(circle, #0a1512 0%, #05080a 75%);
+    border-radius:8px; border:1px solid var(--line);}
+
+  #list{flex:1; overflow-y:auto; padding:0 14px 14px;}
+  .empty{color:var(--dim); font-size:12px; text-align:center; padding:30px 10px; letter-spacing:0.5px;}
+  .row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line);}
+  .row .left{display:flex; flex-direction:column; gap:2px;}
+  .callsign{font-size:14px; font-weight:600; color:var(--text);}
+  .meta{font-size:11px; color:var(--dim); letter-spacing:0.5px;}
+  .row .right{text-align:right; display:flex; flex-direction:column; gap:2px;}
+  .alt{font-size:13px; color:var(--amber);}
+  .closing{font-size:10px; color:var(--red); letter-spacing:1px;}
+
+  /* Settings overlay */
+  #settings{position:fixed; inset:0; background:var(--bg); z-index:20; transform:translateX(100%);
+    transition:transform .25s ease; display:flex; flex-direction:column;}
+  #settings.open{transform:translateX(0);}
+  #settings header{border-bottom:1px solid var(--line);}
+  .back{color:var(--green); font-size:14px; padding:4px 8px 4px 0;}
+  .settingsBody{padding:16px; overflow-y:auto;}
+  .field{margin-bottom:22px;}
+  .field label{display:block; font-size:11px; letter-spacing:1px; color:var(--dim); margin-bottom:8px; text-transform:uppercase;}
+  .stepper{display:flex; align-items:center; justify-content:space-between; background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:10px 14px;}
+  .stepper .val{font-size:15px; color:var(--green);}
+  .stepper button{background:none; border:1px solid var(--line); color:var(--text); width:32px; height:32px;
+    border-radius:6px; font-size:18px; line-height:1;}
+  .toggleRow{display:flex; align-items:center; justify-content:space-between; background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:12px 14px;}
+  .switch{width:44px; height:26px; border-radius:13px; background:var(--line); position:relative; transition:.2s;}
+  .switch.on{background:var(--green-dim);}
+  .switch::after{content:''; position:absolute; width:20px; height:20px; border-radius:50%; background:#fff;
+    top:3px; left:3px; transition:.2s;}
+  .switch.on::after{left:21px;}
+  input[type=text]{width:100%; background:var(--panel); border:1px solid var(--line); color:var(--text);
+    padding:10px 12px; border-radius:8px; font-family:inherit; font-size:14px;}
+  .hint{font-size:11px; color:var(--dim); margin-top:6px; line-height:1.4;}
+  .disclaimer{font-size:11px; color:var(--dim); line-height:1.5; border-top:1px solid var(--line); padding-top:14px; margin-top:6px;}
+  .primeBtn{width:100%; background:var(--green-dim); color:#03110a; border:none; padding:14px; border-radius:8px;
+    font-weight:700; font-size:13px; letter-spacing:1px; margin-top:6px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>TRAFFIC ALERT</h1>
+    <div class="status">
+      <span><span class="dot" id="dotStratux"></span>NET</span>
+      <span><span class="dot" id="dotGps"></span>GPS</span>
+      <span class="gear" id="openSettings">⚙</span>
+    </div>
+  </header>
+
+  <div id="radarWrap"><canvas id="radar" width="600" height="600"></canvas></div>
+
+  <div id="list"><div class="empty">Waiting for traffic…</div></div>
+</div>
+
+<div id="settings">
+  <header>
+    <span class="back" id="closeSettings">‹ Back</span>
+    <h1>SETTINGS</h1>
+    <span style="width:40px"></span>
+  </header>
+  <div class="settingsBody">
+    <div class="field">
+      <label>Alert distance</label>
+      <div class="stepper">
+        <button data-step="range" data-delta="-1">−</button>
+        <span class="val" id="valRange">5 nm</span>
+        <button data-step="range" data-delta="1">+</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Altitude band (AGL)</label>
+      <div class="stepper">
+        <button data-step="alt" data-delta="-200">−</button>
+        <span class="val" id="valAlt">2000 ft</span>
+        <button data-step="alt" data-delta="200">+</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Repeat no sooner than</label>
+      <div class="stepper">
+        <button data-step="freq" data-delta="-5">−</button>
+        <span class="val" id="valFreq">45 s</span>
+        <button data-step="freq" data-delta="5">+</button>
+      </div>
+      <div class="hint">Fast-closing traffic can still re-alert early.</div>
+    </div>
+    <div class="field">
+      <label>Voice alerts</label>
+      <div class="toggleRow">
+        <span>Speak traffic calls</span>
+        <div class="switch on" id="voiceToggle"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Data source</label>
+      <div class="hint">
+        Traffic comes from a free public internet ADS-B feed (airplanes.live), not a local
+        receiver. Expect 5–60+ second latency and gaps in low-altitude/close-in coverage
+        depending on community receiver density in your area. Each target below shows how
+        old its last position report is.
+      </div>
+      <button class="primeBtn" id="reconnectBtn">REFRESH NOW</button>
+    </div>
+    <div class="disclaimer">
+      Altitudes shown are ESTIMATED AGL — reported MSL altitude minus estimated ground elevation
+      (online lookup, falling back to phone GPS altitude). Not a certified altitude source.
+      This tool is a broad situational-awareness aid using delayed internet data — it is
+      <strong>not</strong> a real-time collision-avoidance system and should not be relied on
+      as your only traffic picture.
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- Settings (persisted) ---------------- */
+const settings = {
+  rangeNM: +localStorage.getItem('rangeNM') || 5,
+  altFt: +localStorage.getItem('altFt') || 2000,
+  freqSec: +localStorage.getItem('freqSec') || 45,
+  voice: localStorage.getItem('voice') !== 'off',
+  host: localStorage.getItem('host') || '192.168.10.1'
+};
+function saveSettings(){
+  localStorage.setItem('rangeNM', settings.rangeNM);
+  localStorage.setItem('altFt', settings.altFt);
+  localStorage.setItem('freqSec', settings.freqSec);
+  localStorage.setItem('voice', settings.voice ? 'on':'off');
+  localStorage.setItem('host', settings.host);
+}
+function refreshSettingsUI(){
+  document.getElementById('valRange').textContent = settings.rangeNM + ' nm';
+  document.getElementById('valAlt').textContent = settings.altFt + ' ft';
+  document.getElementById('valFreq').textContent = settings.freqSec + ' s';
+  document.getElementById('voiceToggle').classList.toggle('on', settings.voice);
+  document.getElementById('stratuxHost').value = settings.host;
+}
+refreshSettingsUI();
+
+document.querySelectorAll('button[data-step]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const d = +btn.dataset.delta;
+    if(btn.dataset.step==='range') settings.rangeNM = Math.max(1, Math.min(20, settings.rangeNM+d));
+    if(btn.dataset.step==='alt') settings.altFt = Math.max(200, Math.min(5000, settings.altFt+d));
+    if(btn.dataset.step==='freq') settings.freqSec = Math.max(10, Math.min(180, settings.freqSec+d));
+    saveSettings(); refreshSettingsUI();
+  });
+});
+document.getElementById('voiceToggle').addEventListener('click', ()=>{
+  settings.voice = !settings.voice; saveSettings(); refreshSettingsUI();
+});
+document.getElementById('openSettings').addEventListener('click', ()=> document.getElementById('settings').classList.add('open'));
+document.getElementById('closeSettings').addEventListener('click', ()=> document.getElementById('settings').classList.remove('open'));
+document.getElementById('reconnectBtn').addEventListener('click', ()=>{
+  pollTraffic();
+  document.getElementById('settings').classList.remove('open');
+});
+
+/* ---------------- GPS (phone location — the only position source) ---------------- */
+let userLoc = null; // {lat, lon, altFt, track}
+function setGpsDot(ok){ document.getElementById('dotGps').className = 'dot ' + (ok?'on':'off'); }
+
+if('geolocation' in navigator){
+  navigator.geolocation.watchPosition(pos=>{
+    userLoc = {
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      altFt: (pos.coords.altitude!=null) ? pos.coords.altitude*3.28084 : null,
+      track: (pos.coords.heading!=null && pos.coords.heading>=0) ? pos.coords.heading : 0
+    };
+    setGpsDot(true);
+  }, err=>{ setGpsDot(false); console.warn('GPS error', err); },
+  { enableHighAccuracy:true, maximumAge:1000, timeout:10000 });
+} else {
+  setGpsDot(false);
+}
+
+/* ---------------- Ground elevation estimate (best-effort, cached) ---------------- */
+let groundElevFt = null;
+let lastElevLookup = null;
+async function refreshGroundElevation(){
+  if(!userLoc) return;
+  if(lastElevLookup){
+    const d = haversineNM(lastElevLookup.lat,lastElevLookup.lon,userLoc.lat,userLoc.lon);
+    if(d < 0.27) return; // ~500m, reuse cache
+  }
+  lastElevLookup = {lat:userLoc.lat, lon:userLoc.lon};
+  try{
+    const r = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${userLoc.lat},${userLoc.lon}`);
+    const j = await r.json();
+    const meters = j?.results?.[0]?.elevation;
+    if(typeof meters === 'number') groundElevFt = meters*3.28084;
+  }catch(e){
+    // no internet reachable (common if Stratux Wi-Fi has no internet uplink) — fall back to phone altitude
+    groundElevFt = null;
+  }
+}
+setInterval(refreshGroundElevation, 15000);
+
+/* ---------------- Internet traffic source (airplanes.live public API) ---------------- */
+// No receiver needed — polls a free community ADS-B aggregator centered on your GPS position.
+// NOTE: this is a best-effort free public API with no uptime guarantee. If it changes or goes
+// down, swap the URL below for another compatible feed (e.g. api.adsb.lol uses the same shape).
+let targets = {}; // icao hex -> target object
+let netOk = false;
+function setStxDot(ok){ netOk = ok; document.getElementById('dotStratux').className = 'dot ' + (ok?'on':'off'); }
+
+const MAX_RADIUS_NM = 250; // API cap
+let polling = false;
+// Compatible mirrors, tried in order. If the first is unreachable (down, or
+// blocks browser CORS requests) the app automatically falls back to the next.
+const ENDPOINTS = [
+  (lat,lon,r)=> `https://api.airplanes.live/v2/point/${lat}/${lon}/${r}`,
+  (lat,lon,r)=> `https://api.adsb.lol/v2/point/${lat}/${lon}/${r}`
+];
+
+async function fetchFromMirrors(lat, lon, radius){
+  for(const buildUrl of ENDPOINTS){
+    try{
+      const res = await fetch(buildUrl(lat, lon, radius));
+      if(!res.ok) continue;
+      const j = await res.json();
+      if(j && Array.isArray(j.ac)) return j;
+    }catch(e){ /* try next mirror */ }
+  }
+  return null;
+}
+
+async function pollTraffic(){
+  if(!userLoc || polling) return;
+  polling = true;
+  const radius = Math.min(MAX_RADIUS_NM, Math.max(5, settings.rangeNM*2));
+  try{
+    const j = await fetchFromMirrors(userLoc.lat.toFixed(4), userLoc.lon.toFixed(4), Math.round(radius));
+    if(!j) throw new Error('all mirrors unreachable');
+    const list = j.ac || [];
+    const seen = new Set();
+    const now = Date.now();
+    list.forEach(ac=>{
+      if(typeof ac.lat !== 'number' || typeof ac.lon !== 'number') return;
+      const id = String(ac.hex || '').toUpperCase();
+      if(!id) return;
+      seen.add(id);
+      const altMSL = (typeof ac.alt_geom === 'number') ? ac.alt_geom
+                    : (typeof ac.alt_baro === 'number') ? ac.alt_baro : null;
+      if(altMSL === null) return; // no usable altitude, skip
+      const ageSec = (typeof ac.seen_pos === 'number') ? ac.seen_pos : (typeof ac.seen === 'number' ? ac.seen : null);
+      const prev = targets[id] || {};
+      targets[id] = {
+        id,
+        callsign: (ac.flight || '').trim() || null,
+        lat: ac.lat, lon: ac.lon, altMSL,
+        track: (typeof ac.track === 'number') ? ac.track : null,
+        speedKts: (typeof ac.gs === 'number') ? ac.gs : null,
+        ageSec,
+        lastUpdated: now,
+        lastAlertedAt: prev.lastAlertedAt || null,
+        lastAlertedDistNM: prev.lastAlertedDistNM
+      };
+    });
+    // drop aircraft no longer in the response
+    for(const id in targets){ if(!seen.has(id)) delete targets[id]; }
+    setStxDot(true);
+  }catch(e){
+    setStxDot(false);
+  }
+  polling = false;
+}
+
+pollTraffic();
+setInterval(pollTraffic, 8000); // poll every 8s — free API, be a good citizen
+
+/* ---------------- Geometry helpers ---------------- */
+function toRad(d){ return d*Math.PI/180; }
+function toDeg(r){ return r*180/Math.PI; }
+function haversineNM(lat1,lon1,lat2,lon2){
+  const R=3440.065; // nm
+  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function bearingDeg(lat1,lon1,lat2,lon2){
+  const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));
+  const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
+  return (toDeg(Math.atan2(y,x))+360)%360;
+}
+function clockPosition(bearingToTarget, userTrack){
+  const rel = ((bearingToTarget-userTrack)+360)%360;
+  let c = Math.round(rel/30) % 12;
+  return c===0 ? 12 : c;
+}
+const COMPASS = ["north","northeast","east","southeast","south","southwest","west","northwest"];
+function compassWord(bearing){
+  const idx = Math.round(((bearing+22.5)%360)/45) % 8;
+  return COMPASS[idx];
+}
+function compassAbbrev(bearing){
+  const A=["N","NE","E","SE","S","SW","W","NW"];
+  const idx = Math.round(((bearing+22.5)%360)/45) % 8;
+  return A[idx];
+}
+function isClosing(t, userLat, userLon, currentDistNM){
+  if(t.track==null || t.speedKts==null || t.speedKts<=5) return false;
+  const nm = t.speedKts * (30/3600); // 30 sec projection
+  const dLat = (nm/60)*Math.cos(toRad(t.track));
+  const dLon = (nm/60)*Math.sin(toRad(t.track))/Math.cos(toRad(t.lat));
+  const projDist = haversineNM(userLat,userLon, t.lat+dLat, t.lon+dLon);
+  return projDist < currentDistNM;
+}
+
+/* ---------------- Speech ---------------- */
+let speechQueue = [];
+let speaking = false;
+let lastSpoken = null;
+function speak(phrase){
+  if(!settings.voice) return;
+  if(lastSpoken===phrase) return;
+  speechQueue.push(phrase);
+  if(!speaking) speakNext();
+}
+function speakNext(){
+  if(speechQueue.length===0){ speaking=false; return; }
+  speaking = true;
+  const phrase = speechQueue.shift();
+  lastSpoken = phrase;
+  const u = new SpeechSynthesisUtterance(phrase);
+  u.rate = 1.05; u.pitch = 1.0; u.lang = 'en-US';
+  u.onend = speakNext; u.onerror = speakNext;
+  speechSynthesis.speak(u);
+}
+function buildPhrase(t){
+  let phrase = "Traffic, ";
+  if(t.distNM < 1.5){
+    phrase += `${t.clock} o'clock, ${Math.round(t.aglFt/100)*100} feet AGL`;
+  } else {
+    const miles = t.distNM<0.75 ? "less than 1 mile" : (Math.round(t.distNM)===1 ? "1 mile" : `${Math.round(t.distNM)} miles`);
+    phrase += `${miles} ${compassWord(t.bearing)}, ${Math.round(t.aglFt/100)*100} feet AGL`;
+  }
+  if(t.track!=null) phrase += `, heading ${compassWord(t.track)}`;
+  if(t.closing) phrase += ", closing";
+  return phrase + ".";
+}
+
+/* ---------------- Main processing loop ---------------- */
+const listEl = document.getElementById('list');
+const canvas = document.getElementById('radar');
+const ctx = canvas.getContext('2d');
+
+function processAndRender(){
+  if(!userLoc){ requestAnimationFrame(loop); return; }
+  const ground = groundElevFt!=null ? groundElevFt : (userLoc.altFt!=null ? userLoc.altFt : 0);
+  const processed = [];
+
+  for(const id in targets){
+    const raw = targets[id];
+    const distNM = haversineNM(userLoc.lat, userLoc.lon, raw.lat, raw.lon);
+    const bearing = bearingDeg(userLoc.lat, userLoc.lon, raw.lat, raw.lon);
+    const clock = clockPosition(bearing, userLoc.track);
+    const aglFt = Math.max(0, raw.altMSL - ground);
+    const closing = isClosing(raw, userLoc.lat, userLoc.lon, distNM);
+
+    const t = { ...raw, distNM, bearing, clock, aglFt, closing };
+
+    if(distNM <= settings.rangeNM*2) processed.push(t);
+
+    // Alert decision
+    if(settings.voice && distNM<=settings.rangeNM && aglFt<=settings.altFt){
+      const now = Date.now();
+      const elapsed = raw.lastAlertedAt ? (now-raw.lastAlertedAt)/1000 : Infinity;
+      const gotCloser = raw.lastAlertedDistNM!=null ? (raw.lastAlertedDistNM - distNM > 0.5) : false;
+      if(elapsed >= settings.freqSec || (closing && gotCloser)){
+        speak(buildPhrase(t));
+        raw.lastAlertedAt = now;
+        raw.lastAlertedDistNM = distNM;
+      }
+    }
+  }
+  processed.sort((a,b)=>a.distNM-b.distNM);
+  renderList(processed);
+  renderRadar(processed);
+  requestAnimationFrame(loop);
+}
+
+function renderList(list){
+  if(list.length===0){ listEl.innerHTML = '<div class="empty">No traffic in range</div>'; return; }
+  listEl.innerHTML = list.map(t=>`
+    <div class="row">
+      <div class="left">
+        <span class="callsign">${t.callsign || 'Traffic '+t.id}</span>
+        <span class="meta">${t.distNM.toFixed(1)} nm • ${compassAbbrev(t.bearing)} • ${t.clock} o'clock${t.ageSec!=null ? ' • '+Math.round(t.ageSec)+'s old' : ''}</span>
+      </div>
+      <div class="right">
+        <span class="alt">${Math.round(t.aglFt)} ft AGL</span>
+        ${t.closing ? '<span class="closing">CLOSING</span>' : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderRadar(list){
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  const cx=w/2, cy=h/2, R=w/2-30;
+
+  // range rings
+  ctx.strokeStyle = 'rgba(57,255,136,0.25)'; ctx.lineWidth=1;
+  [0.33,0.66,1].forEach(f=>{
+    ctx.beginPath(); ctx.arc(cx,cy,R*f,0,Math.PI*2); ctx.stroke();
+  });
+  ctx.fillStyle='rgba(57,255,136,0.5)'; ctx.font='11px monospace'; ctx.textAlign='center';
+  [0.33,0.66,1].forEach(f=>{
+    ctx.fillText(Math.round(settings.rangeNM*f)+' nm', cx, cy-R*f-4);
+  });
+
+  // user marker
+  ctx.fillStyle='#4da6ff';
+  ctx.beginPath(); ctx.moveTo(cx, cy-8); ctx.lineTo(cx-6, cy+6); ctx.lineTo(cx+6, cy+6); ctx.closePath(); ctx.fill();
+
+  const userTrack = userLoc ? userLoc.track : 0;
+  list.forEach(t=>{
+    const rel = ((t.bearing - userTrack)+360)%360;
+    const dist = Math.min(t.distNM, settings.rangeNM);
+    const r = (dist/settings.rangeNM)*R;
+    const ang = toRad(rel-90);
+    const x = cx + Math.cos(ang)*r;
+    const y = cy + Math.sin(ang)*r;
+
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(toRad((t.track!=null?t.track:t.bearing)-userTrack));
+    ctx.fillStyle = t.closing ? '#ff4d4d' : '#ffb400';
+    ctx.beginPath();
+    ctx.moveTo(0,-7); ctx.lineTo(-5,6); ctx.lineTo(0,3); ctx.lineTo(5,6); ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle='#d7e6df'; ctx.font='9px monospace'; ctx.textAlign='center';
+    ctx.fillText(`${Math.round(t.aglFt)}ft`, x, y+16);
+    ctx.fillStyle='#5c7568';
+    ctx.fillText(`${t.distNM.toFixed(1)}nm`, x, y+26);
+  });
+}
+
+function loop(){ processAndRender(); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
