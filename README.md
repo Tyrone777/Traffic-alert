@@ -1,1 +1,1 @@
-trafic
+traffic
